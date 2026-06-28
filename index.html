@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4 Friends Instant Chat</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #121212; color: white; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        
+        #login-screen { background: #1e1e1e; padding: 30px; border-radius: 12px; text-align: center; width: 90%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        #login-screen h2 { margin: 0; color: #007bff; }
+        #username-input { padding: 12px; border: 2px solid #333; border-radius: 8px; background: #2a2a2a; color: white; font-size: 16px; outline: none; text-align: center; }
+        #username-input:focus { border-color: #007bff; }
+        #enter-btn { padding: 12px; border: none; background: #007bff; color: white; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+
+        #chat-screen { width: 100%; height: 100vh; display: none; flex-direction: column; background: #121212; }
+        #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        
+        .msg-wrapper { display: flex; flex-direction: column; max-width: 70%; }
+        .msg { padding: 10px 14px; border-radius: 12px; word-wrap: break-word; font-size: 15px; }
+        .incoming { align-self: flex-start; align-items: flex-start; }
+        .incoming .msg { background: #26262b; border-top-left-radius: 2px; }
+        .outgoing { align-self: flex-end; align-items: flex-end; }
+        .outgoing .msg { background: #007bff; border-top-right-radius: 2px; }
+        .sender-name { font-size: 11px; color: #aaa; margin-bottom: 4px; font-weight: bold; }
+        
+        #input-area { display: flex; padding: 15px; background: #1e1e1e; border-top: 1px solid #2d2d2d; }
+        #msg-input { flex: 1; padding: 12px; border: none; border-radius: 8px; background: #2a2a2a; color: white; outline: none; }
+        #send-btn { padding: 12px 24px; border: none; background: #007bff; color: white; font-weight: bold; margin-left: 10px; border-radius: 8px; cursor: pointer; }
+        
+        #status { font-size: 12px; color: #28a745; text-align: center; padding: 5px; background: #1e1e1e; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. NAME SELECTOR SCREEN -->
+    <div id="login-screen">
+        <h2>Instant Realtime Chat 🚀</h2>
+        <p style="color: #888; margin: 0;">Apna naam daal kar room join karein:</p>
+        <input type="text" id="username-input" placeholder="Enter your name..." maxlength="15">
+        <button id="enter-btn">Join Chat</button>
+    </div>
+
+    <!-- 2. MAIN CHAT SCREEN -->
+    <div id="chat-screen">
+        <div id="status">Connecting to network...</div>
+        <div id="chat-box"></div>
+        <div id="input-area">
+            <input type="text" id="msg-input" placeholder="Type a message...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Ek unique public room string bana lete hain jo sirf tumhare dosto ke liye ho
+        const ROOM_ID = "secret_chat_room_aman_dhruv_12345";
+        let socket;
+        let myName = localStorage.getItem("chat_username");
+
+        const loginScreen = document.getElementById("login-screen");
+        const chatScreen = document.getElementById("chat-screen");
+        const usernameInput = document.getElementById("username-input");
+        const enterBtn = document.getElementById("enter-btn");
+        const chatBox = document.getElementById("chat-box");
+        const msgInput = document.getElementById("msg-input");
+        const sendBtn = document.getElementById("send-btn");
+        const statusDiv = document.getElementById("status");
+
+        if (myName) { startChat(); }
+
+        enterBtn.addEventListener("click", () => {
+            const enteredName = usernameInput.value.trim();
+            if (enteredName === "") return alert("Please enter a name!");
+            myName = enteredName;
+            localStorage.setItem("chat_username", myName);
+            startChat();
+        });
+
+        usernameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") enterBtn.click(); });
+
+        function startChat() {
+            loginScreen.style.display = "none";
+            chatScreen.style.display = "flex";
+
+            // Connecting via a free public secure WebSocket relay (bina kisi login ke)
+            socket = new WebSocket("wss://api.piesocket.com/v3/" + ROOM_ID + "?api_key=VCXCEuvhGcBDP7XhiJJUDvR1e1D3Yf9uTgTyQzN8&notify_self=1");
+
+            socket.onopen = () => {
+                statusDiv.textContent = "● Connected Online (All Networks Ready)";
+                statusDiv.style.color = "#28a745";
+            };
+
+            socket.onclose = () => {
+                statusDiv.textContent = "○ Disconnected. Reconnecting...";
+                statusDiv.style.color = "#dc3545";
+                setTimeout(startChat, 3000); // Auto reconnect login
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (!data.text || !data.sender) return;
+                    displayMessage(data);
+                } catch (e) {
+                    // Ignore non-JSON system messages
+                }
+            };
+        }
+
+        function displayMessage(data) {
+            const msgWrapper = document.createElement("div");
+            msgWrapper.classList.add("msg-wrapper");
+            
+            const msgDiv = document.createElement("div");
+            msgDiv.classList.add("msg");
+            
+            if (data.sender === myName) {
+                msgWrapper.classList.add("outgoing");
+            } else {
+                msgWrapper.classList.add("incoming");
+            }
+            
+            const nameDiv = document.createElement("div");
+            nameDiv.classList.add("sender-name");
+            nameDiv.textContent = data.sender;
+            
+            msgDiv.textContent = data.text;
+            
+            msgWrapper.appendChild(nameDiv);
+            msgWrapper.appendChild(msgDiv);
+            chatBox.appendChild(msgWrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function sendMessage() {
+            if (msgInput.value.trim() === "" || !socket || socket.readyState !== WebSocket.OPEN) return;
+            
+            const payload = {
+                text: msgInput.value,
+                sender: myName,
+                timestamp: Date.now()
+            };
+            
+            socket.send(JSON.stringify(payload));
+            msgInput.value = "";
+        }
+
+        sendBtn.addEventListener("click", sendMessage);
+        msgInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendMessage(); });
+    </script>
+</body>
+</html>
